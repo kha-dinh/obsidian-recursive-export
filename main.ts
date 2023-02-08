@@ -1,4 +1,5 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+var PythonShell = require('python-shell');
 
 // Remember to rename these classes and interfaces!
 
@@ -45,6 +46,8 @@ export default class MyPlugin extends Plugin {
 				editor.replaceSelection('Sample Editor Command');
 			}
 		});
+
+
 		// This adds a complex command that can check whether the current state of the app allows execution of the command
 		this.addCommand({
 			id: 'open-sample-modal-complex',
@@ -53,6 +56,7 @@ export default class MyPlugin extends Plugin {
 				// Conditions to check
 				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
 				if (markdownView) {
+					console.log(markdownView.file);
 					// If checking is true, we're simply "checking" if the command can be run.
 					// If checking is false, then we want to actually perform the operation.
 					if (!checking) {
@@ -90,19 +94,60 @@ export default class MyPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 }
+enum ExportType {
+	Markdown= "Markdown",
+	Html = "Html",
+}
+interface ExportSettings {
+	exportType: ExportType
+}
+const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
+	exportType: ExportType.Markdown
+}
 
 class SampleModal extends Modal {
+	exportSettings: ExportSettings = DEFAULT_EXPORT_SETTINGS;
 	constructor(app: App) {
 		super(app);
 	}
 
+	onSubmit() {
+		console.log(this.exportSettings);
+	}
 	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
+		const { contentEl } = this;
+		contentEl.createEl("h4", { text: "Recursively export the current note with the following settings" });
+		// new Setting(contentEl)
+		// 	.setName("Test")
+		// 	.addText((text) =>
+		// 		text.onChange((value) => {
+		// 			this.result = value
+		// 		}));
+
+		new Setting(contentEl)
+			.setName("Test")
+			.addDropdown((component) => {
+				for (let type in ExportType) {
+					component.addOption(type, type);
+				}
+				component.setValue(this.exportSettings.exportType.toString());
+				component.onChange((value: string) => {
+					this.exportSettings.exportType = ExportType[value as keyof typeof ExportType]
+				});
+			});
+		new Setting(contentEl)
+			.addButton((btn) =>
+				btn
+					.setButtonText("Submit")
+					.setCta()
+					.onClick(() => {
+						this.close();
+						this.onSubmit();
+					}));
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
@@ -116,11 +161,11 @@ class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', { text: 'Settings for my awesome plugin.' });
 
 		new Setting(containerEl)
 			.setName('Setting #1')
