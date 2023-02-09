@@ -1,4 +1,8 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { match } from 'assert';
+import { timeStamp } from 'console';
+import { link } from 'fs';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import * as path from 'path';
 var PythonShell = require('python-shell');
 
 // Remember to rename these classes and interfaces!
@@ -19,7 +23,8 @@ export default class MyPlugin extends Plugin {
 	async onload() {
 
 		await this.loadSettings();
-		// console.log(this.fileSystem.getBasePath())
+
+
 
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
@@ -60,7 +65,6 @@ export default class MyPlugin extends Plugin {
 				// Conditions to check
 				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
 				if (markdownView) {
-					console.log(markdownView.file);
 					// If checking is true, we're simply "checking" if the command can be run.
 					// If checking is false, then we want to actually perform the operation.
 					if (!checking) {
@@ -103,10 +107,10 @@ enum ExportType {
 	Html = "Html",
 }
 interface ExportSettings {
-	exportType: ExportType
+	exportType: ExportType,
 }
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
-	exportType: ExportType.Markdown
+	exportType: ExportType.Markdown,
 }
 
 class SampleModal extends Modal {
@@ -117,6 +121,39 @@ class SampleModal extends Modal {
 
 	onSubmit() {
 		console.log(this.exportSettings);
+		let visitor = new RecursiveVisitor(this.app);
+		let file = this.app.workspace.getActiveViewOfType(MarkdownView)?.file;
+		let { vault } = this.app;
+		let export_root = "_test";
+		vault.adapter.mkdir(export_root).catch((err) => {
+			console.log(err);
+		}).then(() => {
+			let export_dir = path.join(export_root, file?.basename + new Date().getTime().toString());
+			visitor.visit(file);
+			vault.adapter.mkdir(export_dir).catch((err) => {
+				console.log(err);
+			}).then(() => {
+				let new_files: string[];
+				visitor.visited.forEach((file) => {
+					let new_file = path.join(export_dir, file?.path);
+					// mkdir will create all parent paths if neccessary
+					// HELP: On windows, it shows the full file path as the file name
+					vault.adapter.mkdir(path.dirname(new_file)).then(() => {
+						this.app.vault.adapter.copy(file?.path, new_file).then();
+						// console.log(file?.path);
+						// console.log(new_file);
+					});
+					// TODO: Create dir if not exist
+					// new_files.push(new_file);
+					// console.log(new_file);
+
+				});
+				// this.app.vault.adapter.copy
+			});
+		});
+
+
+
 	}
 	onOpen() {
 		const { contentEl } = this;
@@ -155,10 +192,38 @@ class SampleModal extends Modal {
 		contentEl.empty();
 	}
 }
+class RecursiveVisitor {
+	app: App;
+	visited: Set<TFile>;
+	constructor(app: App) {
+		this.app = app;
+		this.visited = new Set();
+	}
 
+	visit(file?: TFile) {
+		// console.log(file)
+		if (!file)
+			return
+		let { vault } = this.app;
+		let links = this.app.metadataCache.resolvedLinks[file.path]
+		this.visited.add(file)
+		for (let link in links) {
+			let child = vault.getAbstractFileByPath(link);
+			if (child && !this.visited.has(child as TFile)) {
+				this.visit(child as TFile);
+			}
+		}
+		// let { vault } = this.app;
+		// vault.cachedRead(file).then(
+		// 	(string) => {
+		// 		console.log(string);
+		// 	}
+		// )
+	}
+}
 class SampleSettingTab extends PluginSettingTab {
 	plugin: MyPlugin;
-
+	visitor: RecursiveVisitor;
 	constructor(app: App, plugin: MyPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -167,7 +232,6 @@ class SampleSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 
-		containerEl.empty();
 
 		containerEl.createEl('h2', { text: 'Settings for my awesome plugin.' });
 
